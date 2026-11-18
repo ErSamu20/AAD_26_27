@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
 import java.util.List;
+import java.math.BigDecimal;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -16,12 +17,13 @@ import static org.junit.jupiter.api.Assertions.*;
 public class AadTexRepositoriesTest {
 
     @Autowired
-    private PostgresqlDriver postgresqlDriver;
-
-    @Autowired
     private StoreRepository storeRepository;
 
+    @Autowired
+    private ProductRepository productRepository;
+
     private static Store testStore;
+    private static Product testProduct;
 
     @Test
     @Order(1)
@@ -82,4 +84,62 @@ public class AadTexRepositoriesTest {
         assertTrue(deleted, "El borrado de la tienda dummy debe ser exitoso");
         assertNull(storeRepository.findById(dummyStore.id()), "La tienda borrada ya no debe existir en BD");
     }
+
+    @Test
+    @Order(3)
+    @DisplayName("03. ProductRepository: CREATE, FIND_BY_ID, FIND_ALL, UPDATE y DELETE")
+    void testProductFullCrud() {
+        String sku = "SKU-REPO-" + System.currentTimeMillis();
+        Product product = Product.builder()
+                .sku(sku)
+                .name("Camisa Repo Test")
+                .price(new BigDecimal("49.95"))
+                .build();
+
+        // CREATE
+        Product created = productRepository.create(product);
+        assertNotNull(created.id(), "El producto creado debe poseer ID");
+
+        // FIND_BY_ID
+        Product fetched = productRepository.findById(created.id());
+        assertEquals("Camisa Repo Test", fetched.name());
+
+        // FIND_ALL
+        List<Product> products = productRepository.findAll();
+        assertTrue(products.stream().anyMatch(p -> p.id().equals(created.id())));
+
+        // UPDATE
+        Product updatedProduct = Product.builder()
+                .id(created.id())
+                .sku(sku)
+                .name("Camisa Repo Modificada")
+                .price(new BigDecimal("59.95"))
+                .build();
+
+        boolean isUpdated = productRepository.update(updatedProduct);
+        assertTrue(isUpdated);
+        assertEquals(new BigDecimal("59.95"), productRepository.findById(created.id()).price());
+
+        testProduct = created;
+    }
+
+    @Test
+    @Order(4)
+    @DisplayName("04. Prevention de SQL Injection mediante PreparedStatement")
+    void testSqlInjectionProtectionInRepo() {
+        String maliciousInput = "' OR '1'='1";
+        Store maliciousStore = Store.builder()
+                .code("SQLI_" + System.currentTimeMillis())
+                .name(maliciousInput)
+                .country("España")
+                .region("EMEA")
+                .build();
+
+        Store created = storeRepository.create(maliciousStore);
+        assertNotNull(created.id());
+
+        Store fetched = storeRepository.findById(created.id());
+        assertEquals(maliciousInput, fetched.name(), "El texto malicioso debe ser parametrizado sin ejecutarse como SQL");
+    }
+
 }
