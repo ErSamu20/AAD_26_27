@@ -1,2 +1,18 @@
+name: aadtex_ra2_act1
+
 services:
-  
+  postgres:
+    image: postgres:15-alpine
+    container_name: aadtex_postgres
+    restart: always
+    environment:
+      POSTGRES_DB: aadtex_db
+      POSTGRES_USER: aadtex_user
+      POSTGRES_PASSWORD: aadtex_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:
