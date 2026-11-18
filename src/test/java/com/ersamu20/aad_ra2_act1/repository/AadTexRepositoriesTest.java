@@ -22,6 +22,9 @@ public class AadTexRepositoriesTest {
     @Autowired
     private ProductRepository productRepository;
 
+    @Autowired
+    private SaleRepository saleRepository;
+
     private static Store testStore;
     private static Product testProduct;
 
@@ -140,6 +143,45 @@ public class AadTexRepositoriesTest {
 
         Store fetched = storeRepository.findById(created.id());
         assertEquals(maliciousInput, fetched.name(), "El texto malicioso debe ser parametrizado sin ejecutarse como SQL");
+    }
+
+    @Test
+    @Order(5)
+    @DisplayName("05. SaleRepository: Cabecera, Detalles, Búsquedas e Invocación CallableStatement")
+    void testSaleRepositoryOperations() throws Exception {
+        assertNotNull(testStore);
+        assertNotNull(testProduct);
+
+        // Crear Venta Cabecera
+        Sale saleHeader = Sale.builder()
+                .storeId(testStore.id())
+                .total(new BigDecimal("99.90"))
+                .build();
+
+        Sale createdSale = saleRepository.createHeader(saleHeader);
+        assertNotNull(createdSale.id(), "La cabecera de la venta debe generar un ID");
+
+        // Crear Detalle
+        SaleDetail detail = SaleDetail.builder()
+                .saleId(createdSale.id())
+                .productId(testProduct.id())
+                .quantity(2)
+                .unitPrice(testProduct.price())
+                .build();
+
+        saleRepository.createDetail(createdSale.id(), detail);
+
+        // FIND_BY_ID & FIND_ALL
+        Sale fetchedSale = saleRepository.findById(createdSale.id());
+        assertNotNull(fetchedSale);
+
+        List<Sale> allSales = saleRepository.findAll();
+        assertFalse(allSales.isEmpty());
+
+        // Invocación de CallableStatement (Función PL/pgSQL)
+        BigDecimal calculatedTotal = saleRepository.calculateTotalSalesByStore(testStore.id());
+        assertNotNull(calculatedTotal);
+        assertTrue(calculatedTotal.compareTo(BigDecimal.ZERO) >= 0);
     }
 
 }
