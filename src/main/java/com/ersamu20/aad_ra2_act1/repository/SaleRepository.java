@@ -35,6 +35,11 @@ public class SaleRepository {
      * Si la venta no trae fecha, se pone la actual (equivale al DEFAULT de la columna).
      */
     public Sale createHeader(Sale sale) {
+        // La cabecera necesita la tienda a la que pertenece (FK id_tienda)
+        if (sale == null || sale.storeId() == null) {
+            throw new IllegalArgumentException("La venta a crear necesita el id de la tienda");
+        }
+
         String sql = """
                 INSERT INTO venta (id_tienda, fecha_venta, total)
                 VALUES (?, ?, ?)
@@ -70,6 +75,10 @@ public class SaleRepository {
 
     /** Inserta una única línea de detalle. Reutiliza el método en lote con una lista de un elemento. */
     public void createDetail(Integer saleId, SaleDetail detail) {
+        // List.of(null) lanzaría NullPointerException: lo evitamos con un mensaje claro
+        if (detail == null) {
+            throw new IllegalArgumentException("La línea de detalle no puede ser null");
+        }
         createDetails(saleId, List.of(detail));
     }
 
@@ -79,6 +88,19 @@ public class SaleRepository {
      * El id de la venta se toma del parámetro saleId (no de cada SaleDetail).
      */
     public void createDetails(Integer saleId, List<SaleDetail> details) {
+        // Validamos TODO antes de abrir la conexión, para fallar pronto y con un mensaje claro
+        if (saleId == null) {
+            throw new IllegalArgumentException("Las líneas de detalle necesitan el id de la venta");
+        }
+        if (details == null) {
+            throw new IllegalArgumentException("La lista de líneas de detalle no puede ser null");
+        }
+        for (SaleDetail detail : details) {
+            if (detail == null || detail.productId() == null || detail.quantity() == null) {
+                throw new IllegalArgumentException("Cada línea de detalle necesita producto y cantidad");
+            }
+        }
+
         String sql = """
                 INSERT INTO detalle_venta (id_venta, id_producto, cantidad, precio_unitario)
                 VALUES (?, ?, ?, ?)
@@ -103,6 +125,11 @@ public class SaleRepository {
 
     /** Devuelve la venta (solo cabecera) o null si no existe. */
     public Sale findById(Integer id) {
+        // Sin id no puede existir ninguna venta (y ps.setInt(1, id) fallaría con un Integer null)
+        if (id == null) {
+            return null;
+        }
+
         String sql = """
                 SELECT id_venta, id_tienda, fecha_venta, total
                 FROM venta
@@ -156,6 +183,11 @@ public class SaleRepository {
      *   - el segundo ? es el parámetro de entrada p_id_tienda (índice 2)
      */
     public BigDecimal calculateTotalSalesByStore(Integer storeId) {
+        // Sin tienda no hay ventas: 0, igual que devuelve la función para una tienda sin ventas
+        if (storeId == null) {
+            return BigDecimal.ZERO;
+        }
+
         String sql = "{ ? = call calcular_total_ventas_tienda(?) }";
 
         try (Connection conn = postgresqlDriver.getConnection();

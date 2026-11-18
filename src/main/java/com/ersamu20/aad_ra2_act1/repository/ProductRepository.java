@@ -26,6 +26,11 @@ public class ProductRepository implements CrudRepository<Product, Integer> {
 
     @Override
     public Product create(Product product) {
+        // Validación previa: sin producto no hay nada que insertar (evita un NullPointerException al leer sus campos)
+        if (product == null) {
+            throw new IllegalArgumentException("El producto a crear no puede ser null");
+        }
+
         String sql = """
                 INSERT INTO producto (sku, nombre, precio)
                 VALUES (?, ?, ?)
@@ -58,6 +63,11 @@ public class ProductRepository implements CrudRepository<Product, Integer> {
 
     @Override
     public Product findById(Integer id) {
+        // Sin id no puede existir ningún producto (y ps.setInt(1, id) fallaría con un Integer null)
+        if (id == null) {
+            return null;
+        }
+
         String sql = """
                 SELECT id_producto, sku, nombre, precio
                 FROM producto
@@ -107,6 +117,11 @@ public class ProductRepository implements CrudRepository<Product, Integer> {
 
     @Override
     public boolean update(Product product) {
+        // Para actualizar hace falta el producto y su id (se usa en el WHERE)
+        if (product == null || product.id() == null) {
+            throw new IllegalArgumentException("Para actualizar un producto hace falta el producto y su id");
+        }
+
         String sql = """
                 UPDATE producto
                 SET sku = ?, nombre = ?, precio = ?
@@ -134,6 +149,11 @@ public class ProductRepository implements CrudRepository<Product, Integer> {
      */
     @Override
     public boolean delete(Integer id) {
+        // Sin id no hay nada que borrar: se indica con false en vez de lanzar un NullPointerException
+        if (id == null) {
+            return false;
+        }
+
         String sql = "DELETE FROM producto WHERE id_producto = ?";
 
         try (Connection conn = postgresqlDriver.getConnection();

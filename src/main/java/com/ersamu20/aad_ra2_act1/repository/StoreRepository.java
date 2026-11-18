@@ -26,6 +26,11 @@ public class StoreRepository implements CrudRepository<Store, Integer> {
 
     @Override
     public Store create(Store store) {
+        // Validación previa: sin tienda no hay nada que insertar (evita un NullPointerException al leer sus campos)
+        if (store == null) {
+            throw new IllegalArgumentException("La tienda a crear no puede ser null");
+        }
+
         // Text block ("""): SQL multilínea sin concatenar cadenas. No incluimos id_tienda: es SERIAL.
         String sql = """
                 INSERT INTO tienda (codigo, nombre, pais, region)
@@ -63,6 +68,12 @@ public class StoreRepository implements CrudRepository<Store, Integer> {
 
     @Override
     public Store findById(Integer id) {
+        // Sin id no puede existir ninguna tienda. Además, ps.setInt(1, id) lanzaría NullPointerException
+        // al desempaquetar un Integer null.
+        if (id == null) {
+            return null;
+        }
+
         String sql = """
                 SELECT id_tienda, codigo, nombre, pais, region
                 FROM tienda
@@ -113,6 +124,11 @@ public class StoreRepository implements CrudRepository<Store, Integer> {
 
     @Override
     public boolean update(Store store) {
+        // Para actualizar hace falta la tienda y su id (se usa en el WHERE)
+        if (store == null || store.id() == null) {
+            throw new IllegalArgumentException("Para actualizar una tienda hace falta la tienda y su id");
+        }
+
         String sql = """
                 UPDATE tienda
                 SET codigo = ?, nombre = ?, pais = ?, region = ?
@@ -138,6 +154,11 @@ public class StoreRepository implements CrudRepository<Store, Integer> {
 
     @Override
     public boolean delete(Integer id) {
+        // Sin id no hay nada que borrar: se indica con false en vez de lanzar un NullPointerException
+        if (id == null) {
+            return false;
+        }
+
         String sql = "DELETE FROM tienda WHERE id_tienda = ?";
 
         try (Connection conn = postgresqlDriver.getConnection();
