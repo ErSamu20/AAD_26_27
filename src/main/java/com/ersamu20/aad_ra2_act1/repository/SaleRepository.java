@@ -22,11 +22,11 @@ import java.util.List;
 /**
  * Acceso a datos de las tablas "venta" (cabecera) y "detalle_venta" (líneas), más la
  * invocación de la función almacenada calcular_total_ventas_tienda.
- * No implementa CrudRepository: una venta no se modifica ni se borra, solo se registra y se consulta.
+ * Implementa el CRUD genérico sobre la cabecera; las líneas de detalle se insertan en lote con createDetails.
  */
 @Repository
 @RequiredArgsConstructor
-public class SaleRepository {
+public class SaleRepository implements CrudRepository<Sale, Long> {
 
     private final PostgresqlDriver postgresqlDriver;
 
@@ -34,7 +34,8 @@ public class SaleRepository {
      * Inserta la cabecera de la venta y devuelve la venta con el ID generado.
      * Si la venta no trae fecha, se pone la actual (equivale al DEFAULT de la columna).
      */
-    public Sale createHeader(Sale sale) {
+    @Override
+    public Sale create(Sale sale) {
         // La cabecera necesita la tienda a la que pertenece (FK id_tienda)
         if (sale == null || sale.storeId() == null) {
             throw new IllegalArgumentException("La venta a crear necesita el id de la tienda");
@@ -50,7 +51,7 @@ public class SaleRepository {
         try (Connection conn = postgresqlDriver.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
 
-            ps.setInt(1, sale.storeId());
+            ps.setLong(1, sale.storeId());
             ps.setTimestamp(2, Timestamp.valueOf(saleDate));   // LocalDateTime -> Timestamp (JDBC)
             ps.setBigDecimal(3, sale.total());
             ps.executeUpdate();
@@ -59,7 +60,7 @@ public class SaleRepository {
             try (ResultSet keys = ps.getGeneratedKeys()) {
                 if (keys.next()) {
                     return Sale.builder()
-                            .id(keys.getInt("id_venta"))
+                            .id(keys.getLong("id_venta"))
                             .storeId(sale.storeId())
                             .saleDate(saleDate)
                             .total(sale.total())
@@ -73,21 +74,12 @@ public class SaleRepository {
         }
     }
 
-    /** Inserta una única línea de detalle. Reutiliza el método en lote con una lista de un elemento. */
-    public void createDetail(Integer saleId, SaleDetail detail) {
-        // List.of(null) lanzaría NullPointerException: lo evitamos con un mensaje claro
-        if (detail == null) {
-            throw new IllegalArgumentException("La línea de detalle no puede ser null");
-        }
-        createDetails(saleId, List.of(detail));
-    }
-
     /**
      * Inserta varias líneas de detalle en LOTE (batch): se acumulan con addBatch() y se envían
      * juntas con executeBatch(), lo que reduce los viajes a la base de datos.
      * El id de la venta se toma del parámetro saleId (no de cada SaleDetail).
      */
-    public void createDetails(Integer saleId, List<SaleDetail> details) {
+    public void createDetails(Long saleId, List<SaleDetail> details) {
         // Validamos TODO antes de abrir la conexión, para fallar pronto y con un mensaje claro
         if (saleId == null) {
             throw new IllegalArgumentException("Las líneas de detalle necesitan el id de la venta");
@@ -110,8 +102,8 @@ public class SaleRepository {
              PreparedStatement ps = conn.prepareStatement(sql)) {
 
             for (SaleDetail detail : details) {
-                ps.setInt(1, saleId);
-                ps.setInt(2, detail.productId());
+                ps.setLong(1, saleId);
+                ps.setLong(2, detail.productId());
                 ps.setInt(3, detail.quantity());
                 ps.setBigDecimal(4, detail.unitPrice());
                 ps.addBatch();                              // acumula esta línea en el lote
@@ -124,7 +116,8 @@ public class SaleRepository {
     }
 
     /** Devuelve la venta (solo cabecera) o null si no existe. */
-    public Sale findById(Integer id) {
+    @Override
+    public Sale findById(Long id) {
         // Sin id no puede existir ninguna venta (y ps.setInt(1, id) fallaría con un Integer null)
         if (id == null) {
             return null;
@@ -139,7 +132,7 @@ public class SaleRepository {
         try (Connection conn = postgresqlDriver.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
 
-            ps.setInt(1, id);
+            ps.setLong(1, id);
 
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {
@@ -153,6 +146,7 @@ public class SaleRepository {
         }
     }
 
+    @Override
     public List<Sale> findAll() {
         String sql = """
                 SELECT id_venta, id_tienda, fecha_venta, total
@@ -177,24 +171,79 @@ public class SaleRepository {
     }
 
     /**
+     * Actualiza id_tienda y total de una venta. No toca fecha_venta: la fecha de una venta no cambia
+     * al corregir sus datos (y el test construye la Sale sin fecha).
+     * Devuelve true si se actualizó alguna fila.
+     */
+    @Override
+    public boolean update(Sale sale) {
+        // Hace falta la venta, su id (WHERE) y la tienda (columna NOT NULL)
+        if (sale == null || sale.id() == null || sale.storeId() == null) {
+            throw new IllegalArgumentException("Para actualizar una venta hacen falta su id y el id de la tienda");
+        }
+
+        String sql = """
+                UPDATE venta
+                SET id_tienda = ?, total = ?
+                WHERE id_venta = ?
+                """;
+
+        try (Connection conn = postgresqlDriver.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+
+            ps.setLong(1, sale.storeId());
+            ps.setBigDecimal(2, sale.total());
+            ps.setLong(3, sale.id());
+
+            return ps.executeUpdate() > 0;
+
+        } catch (SQLException e) {
+            throw new RuntimeException("Error actualizando la venta con id " + sale.id(), e);
+        }
+    }
+
+    /**
+     * Borra una venta. Sus líneas de detalle se borran solas (ON DELETE CASCADE en detalle_venta).
+     * Devuelve false si la venta no existe (o el id es null).
+     */
+    @Override
+    public boolean delete(Long id) {
+        if (id == null) {
+            return false;
+        }
+
+        String sql = "DELETE FROM venta WHERE id_venta = ?";
+
+        try (Connection conn = postgresqlDriver.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+
+            ps.setLong(1, id);
+            return ps.executeUpdate() > 0;
+
+        } catch (SQLException e) {
+            throw new RuntimeException("Error borrando la venta con id " + id, e);
+        }
+    }
+
+    /**
      * Invoca la función PL/pgSQL calcular_total_ventas_tienda con un CallableStatement.
      * Sintaxis JDBC de función: { ? = call nombre(?) }
      *   - el primer ? es el valor de RETORNO (parámetro de salida, índice 1)
      *   - el segundo ? es el parámetro de entrada p_id_tienda (índice 2)
      */
-    public BigDecimal calculateTotalSalesByStore(Integer storeId) {
+    public BigDecimal calculateTotalSalesByStore(Long storeId) {
         // Sin tienda no hay ventas: 0, igual que devuelve la función para una tienda sin ventas
         if (storeId == null) {
             return BigDecimal.ZERO;
         }
 
-        String sql = "{ ? = call calcular_total_ventas_tienda(?) }";
+        String sql = "{ ? = call calcular_total_ventas_tienda(CAST(? AS INTEGER)) }";
 
         try (Connection conn = postgresqlDriver.getConnection();
              CallableStatement cs = conn.prepareCall(sql)) {
 
             cs.registerOutParameter(1, Types.NUMERIC);     // declaramos el tipo del valor devuelto
-            cs.setInt(2, storeId);
+            cs.setLong(2, storeId);
             cs.execute();
 
             return cs.getBigDecimal(1);                    // leemos el parámetro de salida
@@ -208,8 +257,8 @@ public class SaleRepository {
     private Sale mapRow(ResultSet rs) throws SQLException {
         Timestamp timestamp = rs.getTimestamp("fecha_venta");
         return Sale.builder()
-                .id(rs.getInt("id_venta"))
-                .storeId(rs.getInt("id_tienda"))
+                .id(rs.getLong("id_venta"))
+                .storeId(rs.getLong("id_tienda"))
                 .saleDate(timestamp != null ? timestamp.toLocalDateTime() : null)
                 .total(rs.getBigDecimal("total"))
                 .build();

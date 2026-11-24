@@ -11,8 +11,8 @@ import java.time.LocalDateTime;
  */
 @Builder
 public record Sale(
-        Integer id,                 // id_venta
-        Integer storeId,            // id_tienda (FK)
+        Long id,                 // id_venta
+        Long storeId,            // id_tienda (FK)
         LocalDateTime saleDate,     // fecha_venta (si es null, la BD usa CURRENT_TIMESTAMP)
         BigDecimal total            // total de la venta
 ) {}

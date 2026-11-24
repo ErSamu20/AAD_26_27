@@ -23,7 +23,7 @@ public class StoreService {
     }
 
     /** Devuelve la tienda o null si no existe. */
-    public Store getStoreById(Integer id) {
+    public Store getStoreById(Long id) {
         return storeRepository.findById(id);
     }
 
@@ -35,7 +35,7 @@ public class StoreService {
         return storeRepository.update(store);
     }
 
-    public boolean deleteStore(Integer id) {
+    public boolean deleteStore(Long id) {
         return storeRepository.delete(id);
     }
 }

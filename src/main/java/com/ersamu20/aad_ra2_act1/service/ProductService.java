@@ -21,7 +21,7 @@ public class ProductService {
     }
 
     /** Devuelve el producto o null si no existe. */
-    public Product getProductById(Integer id) {
+    public Product getProductById(Long id) {
         return productRepository.findById(id);
     }
 
@@ -33,7 +33,7 @@ public class ProductService {
         return productRepository.update(product);
     }
 
-    public boolean deleteProduct(Integer id) {
+    public boolean deleteProduct(Long id) {
         return productRepository.delete(id);
     }
 }

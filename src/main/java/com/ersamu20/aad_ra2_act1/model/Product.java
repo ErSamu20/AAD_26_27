@@ -10,7 +10,7 @@ import java.math.BigDecimal;
  */
 @Builder
 public record Product(
-        Integer id,          // id_producto
+        Long id,          // id_producto
         String sku,          // sku (único)
         String name,         // nombre
         BigDecimal price     // precio (> 0)

@@ -20,7 +20,7 @@ import java.util.List;
  */
 @Repository
 @RequiredArgsConstructor
-public class ProductRepository implements CrudRepository<Product, Integer> {
+public class ProductRepository implements CrudRepository<Product, Long> {
 
     private final PostgresqlDriver postgresqlDriver;
 
@@ -47,7 +47,7 @@ public class ProductRepository implements CrudRepository<Product, Integer> {
             try (ResultSet keys = ps.getGeneratedKeys()) {
                 if (keys.next()) {
                     return Product.builder()
-                            .id(keys.getInt("id_producto"))
+                            .id(keys.getLong("id_producto"))
                             .sku(product.sku())
                             .name(product.name())
                             .price(product.price())
@@ -62,7 +62,7 @@ public class ProductRepository implements CrudRepository<Product, Integer> {
     }
 
     @Override
-    public Product findById(Integer id) {
+    public Product findById(Long id) {
         // Sin id no puede existir ningún producto (y ps.setInt(1, id) fallaría con un Integer null)
         if (id == null) {
             return null;
@@ -77,7 +77,7 @@ public class ProductRepository implements CrudRepository<Product, Integer> {
         try (Connection conn = postgresqlDriver.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
 
-            ps.setInt(1, id);
+            ps.setLong(1, id);
 
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {
@@ -134,7 +134,7 @@ public class ProductRepository implements CrudRepository<Product, Integer> {
             ps.setString(1, product.sku());
             ps.setString(2, product.name());
             ps.setBigDecimal(3, product.price());
-            ps.setInt(4, product.id());
+            ps.setLong(4, product.id());
 
             return ps.executeUpdate() > 0;
 
@@ -148,7 +148,7 @@ public class ProductRepository implements CrudRepository<Product, Integer> {
      * (ON DELETE RESTRICT) y se lanza una excepción: no se puede borrar algo que tiene ventas.
      */
     @Override
-    public boolean delete(Integer id) {
+    public boolean delete(Long id) {
         // Sin id no hay nada que borrar: se indica con false en vez de lanzar un NullPointerException
         if (id == null) {
             return false;
@@ -159,7 +159,7 @@ public class ProductRepository implements CrudRepository<Product, Integer> {
         try (Connection conn = postgresqlDriver.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
 
-            ps.setInt(1, id);
+            ps.setLong(1, id);
             return ps.executeUpdate() > 0;
 
         } catch (SQLException e) {
@@ -170,7 +170,7 @@ public class ProductRepository implements CrudRepository<Product, Integer> {
     /** Convierte la fila actual del ResultSet en un Product. */
     private Product mapRow(ResultSet rs) throws SQLException {
         return Product.builder()
-                .id(rs.getInt("id_producto"))
+                .id(rs.getLong("id_producto"))
                 .sku(rs.getString("sku"))
                 .name(rs.getString("nombre"))
                 .price(rs.getBigDecimal("precio"))     // NUMERIC -> BigDecimal exacto

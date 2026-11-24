@@ -20,7 +20,7 @@ import java.util.List;
  */
 @Repository                 // Spring la registra como bean para poder inyectarla
 @RequiredArgsConstructor    // Constructor con PostgresqlDriver (atributo final)
-public class StoreRepository implements CrudRepository<Store, Integer> {
+public class StoreRepository implements CrudRepository<Store, Long> {
 
     private final PostgresqlDriver postgresqlDriver;
 
@@ -51,7 +51,7 @@ public class StoreRepository implements CrudRepository<Store, Integer> {
             try (ResultSet keys = ps.getGeneratedKeys()) {
                 if (keys.next()) {
                     return Store.builder()
-                            .id(keys.getInt("id_tienda"))
+                            .id(keys.getLong("id_tienda"))
                             .code(store.code())
                             .name(store.name())
                             .country(store.country())
@@ -67,8 +67,8 @@ public class StoreRepository implements CrudRepository<Store, Integer> {
     }
 
     @Override
-    public Store findById(Integer id) {
-        // Sin id no puede existir ninguna tienda. Además, ps.setInt(1, id) lanzaría NullPointerException
+    public Store findById(Long id) {
+        // Sin id no puede existir ninguna tienda. Además, ps.setLong(1, id) lanzaría NullPointerException
         // al desempaquetar un Integer null.
         if (id == null) {
             return null;
@@ -83,7 +83,7 @@ public class StoreRepository implements CrudRepository<Store, Integer> {
         try (Connection conn = postgresqlDriver.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
 
-            ps.setInt(1, id);
+            ps.setLong(1, id);
 
             try (ResultSet rs = ps.executeQuery()) {
                 // El cursor empieza ANTES de la primera fila: rs.next() avanza y dice si hay fila
@@ -142,7 +142,7 @@ public class StoreRepository implements CrudRepository<Store, Integer> {
             ps.setString(2, store.name());
             ps.setString(3, store.country());
             ps.setString(4, store.region());
-            ps.setInt(5, store.id());
+            ps.setLong(5, store.id());
 
             // executeUpdate devuelve el número de filas afectadas
             return ps.executeUpdate() > 0;
@@ -153,7 +153,7 @@ public class StoreRepository implements CrudRepository<Store, Integer> {
     }
 
     @Override
-    public boolean delete(Integer id) {
+    public boolean delete(Long id) {
         // Sin id no hay nada que borrar: se indica con false en vez de lanzar un NullPointerException
         if (id == null) {
             return false;
@@ -164,7 +164,7 @@ public class StoreRepository implements CrudRepository<Store, Integer> {
         try (Connection conn = postgresqlDriver.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
 
-            ps.setInt(1, id);
+            ps.setLong(1, id);
             return ps.executeUpdate() > 0;
 
         } catch (SQLException e) {
@@ -175,7 +175,7 @@ public class StoreRepository implements CrudRepository<Store, Integer> {
     /** Convierte la fila actual del ResultSet en un Store. Evita repetir código en findById y findAll. */
     private Store mapRow(ResultSet rs) throws SQLException {
         return Store.builder()
-                .id(rs.getInt("id_tienda"))
+                .id(rs.getLong("id_tienda"))
                 .code(rs.getString("codigo"))
                 .name(rs.getString("nombre"))
                 .country(rs.getString("pais"))

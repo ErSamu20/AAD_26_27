@@ -10,7 +10,7 @@ import lombok.Builder;
  */
 @Builder
 public record Store(
-        Integer id,        // id_tienda (null hasta que la BD lo genera)
+        Long id,        // id_tienda (null hasta que la BD lo genera)
         String code,       // codigo
         String name,       // nombre
         String country,    // pais

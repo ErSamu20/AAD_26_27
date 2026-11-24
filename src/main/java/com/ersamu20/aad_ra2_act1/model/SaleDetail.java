@@ -10,8 +10,8 @@ import java.math.BigDecimal;
  */
 @Builder
 public record SaleDetail(
-        Integer saleId,           // id_venta (FK)
-        Integer productId,        // id_producto (FK)
+        Long saleId,           // id_venta (FK)
+        Long productId,        // id_producto (FK)
         Integer quantity,         // cantidad (> 0)
         BigDecimal unitPrice      // precio_unitario en el momento de la venta
 ) {}
