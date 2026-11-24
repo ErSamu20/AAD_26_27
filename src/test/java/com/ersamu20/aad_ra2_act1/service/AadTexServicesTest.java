@@ -6,6 +6,11 @@ import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.Statement;
+
 import java.math.BigDecimal;
 import java.util.List;
 
@@ -24,6 +29,9 @@ public class AadTexServicesTest {
 
     @Autowired
     private ProductService productService;
+
+    @Autowired
+    private SaleService saleService;
 
     private static Store activeStore;
     private static Product activeProduct1;
@@ -95,5 +103,82 @@ public class AadTexServicesTest {
 
         activeProduct1 = p1;
         activeProduct2 = p2;
+    }
+
+    @Test
+    @Order(3)
+    @DisplayName("03. SaleService: Procesamiento Exitoso de Venta Transaccional (Commit ACID)")
+    void testProcessSaleSuccessCommit() throws Exception {
+        assertNotNull(activeStore);
+        assertNotNull(activeProduct1);
+        assertNotNull(activeProduct2);
+
+        // Detalle: (1 * 120.00) + (2 * 25.00) = 170.00 €
+        List<SaleDetail> details = List.of(
+                SaleDetail.builder().productId(activeProduct1.id()).quantity(1).unitPrice(activeProduct1.price()).build(),
+                SaleDetail.builder().productId(activeProduct2.id()).quantity(2).unitPrice(activeProduct2.price()).build()
+        );
+
+        Sale sale = saleService.processSale(activeStore.id(), details);
+
+        assertNotNull(sale.id(), "La venta debe haber sido persistida con ID asignado");
+        assertEquals(0, new BigDecimal("170.00").compareTo(sale.total()), "El cálculo del total de la venta debe ser 170.00 €");
+        try (Connection conn = postgresqlDriver.getConnection();
+             // ADAPTADO: nombres de tabla/columna del DDL (el test original decía sale_details / sale_id)
+             PreparedStatement ps = conn.prepareStatement("SELECT COUNT(*) FROM detalle_venta WHERE id_venta = ?")) {
+            ps.setLong(1, sale.id());
+            try (ResultSet rs = ps.executeQuery()) {
+                assertTrue(rs.next());
+                assertEquals(2, rs.getInt(1));
+            }
+        }
+    }
+
+    @Test
+    @Order(4)
+    @DisplayName("04. SaleService: Prueba Crítica de Rollback Transaccional ante Fallo de Integridad")
+    void testProcessSaleRollbackOnFailure() throws Exception {
+        assertNotNull(activeStore);
+
+        int salesCountBefore = countSalesInDb();
+
+        // Producto inexistente ID 999999 forzará un fallo de FK en detalle_venta
+        Long invalidProductId = 999999L;
+        List<SaleDetail> invalidDetails = List.of(
+                SaleDetail.builder().productId(activeProduct1.id()).quantity(1).unitPrice(activeProduct1.price()).build(),
+                SaleDetail.builder().productId(invalidProductId).quantity(1).unitPrice(new BigDecimal("50.00")).build()
+        );
+
+        // Se espera que el servicio lance excepción al detectar el fallo en la transacción
+        assertThrows(RuntimeException.class, () -> saleService.processSale(activeStore.id(), invalidDetails), "El servicio debe lanzar RuntimeException tras hacer rollback");
+
+        int salesCountAfter = countSalesInDb();
+
+        // Verificación ACID: El rollback manual debe haber deshecho la cabecera insertada previamente
+        assertEquals(salesCountBefore, salesCountAfter, "El total de ventas en BD debe ser idéntico al inicial (Rollback ejecutado)");
+    }
+
+    @Test
+    @Order(5)
+    @DisplayName("05. SaleService: Validación de Invocación de Función PL/pgSQL de Totales por Tienda")
+    void testGetTotalSalesByStore() {
+        assertNotNull(activeStore);
+
+        BigDecimal totalFacturado = saleService.getTotalSalesByStore(activeStore.id());
+
+        assertNotNull(totalFacturado);
+        assertTrue(totalFacturado.compareTo(BigDecimal.ZERO) > 0, "La función PL/pgSQL debe devolver el total acumulado de las ventas de la tienda");
+    }
+
+    private int countSalesInDb() throws Exception {
+        try (Connection conn = postgresqlDriver.getConnection();
+             Statement st = conn.createStatement();
+             // ADAPTADO: tabla "venta" del DDL (el test original decía sales)
+             ResultSet rs = st.executeQuery("SELECT COUNT(*) FROM venta")) {
+            if (rs.next()) {
+                return rs.getInt(1);
+            }
+        }
+        return 0;
     }
 }
