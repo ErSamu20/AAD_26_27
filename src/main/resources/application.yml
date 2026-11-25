@@ -1,0 +1,8 @@
+spring:
+  application:
+    name: aad_ra2_act1
+database:
+  url: jdbc:postgresql://localhost:5432/aadtex_db?ssl=false&currentSchema=public
+  username: aadtex_user
+  password: aadtex_pass
+  driver-class-name: org.postgresql.Driver
